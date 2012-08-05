@@ -22,8 +22,10 @@ var UpdaterBase = new Class({
 
 				if(json.update_available)
 					self.doUpdate();
-				else
-					App.unBlockPage()
+				else {
+					App.unBlockPage();
+					App.fireEvent('message', 'No updates available');
+				}
 			}
 		})
 
@@ -59,6 +61,8 @@ var UpdaterBase = new Class({
 
 	createMessage: function(data){
 		var self = this;
+
+		if(self.message) return;
 
 		var changelog = 'https://github.com/'+data.repo_name+'/compare/'+data.version.hash+'...'+data.branch;
 		if(data.update_version.changelog)

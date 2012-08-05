@@ -1,4 +1,4 @@
-/_source/
+*.pyc
 /data/
 *.sw?
 *.pyc
