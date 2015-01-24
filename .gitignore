@@ -1,4 +1,5 @@
 *.pyc
 /data/
-*.sw?
-*.pyc
+/_source/
+.project
+.pydevproject

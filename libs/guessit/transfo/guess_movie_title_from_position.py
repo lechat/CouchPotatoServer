@@ -18,7 +18,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import unicode_literals
 from guessit import Guess
+import unicodedata
 import logging
 
 log = logging.getLogger(__name__)
@@ -27,7 +29,8 @@ log = logging.getLogger(__name__)
 def process(mtree):
     def found_property(node, name, value, confidence):
         node.guess = Guess({ name: value },
-                           confidence=confidence)
+                           confidence=confidence,
+                           raw=value)
         log.debug('Found with confidence %.2f: %s' % (confidence, node.guess))
 
     def found_title(node, confidence):

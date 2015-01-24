@@ -1,1 +1,2 @@
-VERSION = '2.0.0.pre1'
+VERSION = None
+BRANCH = 'master'

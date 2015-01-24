@@ -1,6 +1,7 @@
 from .main import Twitter
 
-def start():
+
+def autoload():
     return Twitter()
 
 config = [{
@@ -8,6 +9,7 @@ config = [{
     'groups': [
         {
             'tab': 'notifications',
+            'list': 'notification_providers',
             'name': 'twitter',
             'options': [
                 {

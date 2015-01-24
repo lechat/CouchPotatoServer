@@ -18,8 +18,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import unicode_literals
+from guessit import s, u
 import os.path
 import zipfile
+import io
 
 
 def split_path(path):
@@ -31,23 +34,24 @@ def split_path(path):
      - the drive letter on Windows systems (eg: r'C:\')
      - the mount point '\\' on Windows systems (eg: r'\\host\share')
 
-    >>> split_path('/usr/bin/smewt')
+    >>> s(split_path('/usr/bin/smewt'))
     ['/', 'usr', 'bin', 'smewt']
 
-    >>> split_path('relative_path/to/my_folder/')
+    >>> s(split_path('relative_path/to/my_folder/'))
     ['relative_path', 'to', 'my_folder']
 
     """
     result = []
     while True:
         head, tail = os.path.split(path)
+        headlen = len(head)
 
         # on Unix systems, the root folder is '/'
-        if head == '/' and tail == '':
+        if head and head == '/'*headlen and tail == '':
             return ['/'] + result
 
         # on Windows, the root folder is a drive letter (eg: 'C:\') or for shares \\
-        if ((len(head) == 3 and head[1:] == ':\\') or (len(head) == 2 and head == '\\\\')) and tail == '':
+        if ((headlen == 3 and head[1:] == ':\\') or (headlen == 2 and head == '\\\\')) and tail == '':
             return [head] + result
 
         if head == '' and tail == '':
@@ -58,6 +62,7 @@ def split_path(path):
             path = head
             continue
 
+        # otherwise, add the last path fragment and keep splitting
         result = [tail] + result
         path = head
 
@@ -65,7 +70,7 @@ def split_path(path):
 def file_in_same_dir(ref_file, desired_file):
     """Return the path for a file in the same dir as a given reference file.
 
-    >>> file_in_same_dir('~/smewt/smewt.db', 'smewt.settings')
+    >>> s(file_in_same_dir('~/smewt/smewt.db', 'smewt.settings'))
     '~/smewt/smewt.settings'
 
     """
@@ -74,7 +79,9 @@ def file_in_same_dir(ref_file, desired_file):
 
 def load_file_in_same_dir(ref_file, filename):
     """Load a given file. Works even when the file is contained inside a zip."""
-    path = split_path(ref_file)[:-1] + [filename]
+
+    from couchpotato.core.helpers.encoding import toUnicode
+    path = split_path(toUnicode(ref_file))[:-1] + [filename]
 
     for i, p in enumerate(path):
         if p.endswith('.zip'):
@@ -82,4 +89,4 @@ def load_file_in_same_dir(ref_file, filename):
             zfile = zipfile.ZipFile(zfilename)
             return zfile.read('/'.join(path[i + 1:]))
 
-    return open(os.path.join(*path)).read()
+    return u(io.open(os.path.join(*path), encoding='utf-8').read())

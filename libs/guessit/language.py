@@ -19,15 +19,16 @@
 #
 
 from __future__ import unicode_literals
-from guessit import fileutils
+from guessit import UnicodeMixin, base_text_type, u, s
+from guessit.fileutils import load_file_in_same_dir
+from guessit.textutils import find_words
 from guessit.country import Country
-from guessit.textutils import to_unicode
 import re
 import logging
 
 __all__ = [ 'is_iso_language', 'is_language', 'lang_set', 'Language',
             'ALL_LANGUAGES', 'ALL_LANGUAGES_NAMES', 'UNDETERMINED',
-            'search_language' ]
+            'search_language', 'guess_language' ]
 
 
 log = logging.getLogger(__name__)
@@ -39,8 +40,7 @@ log = logging.getLogger(__name__)
 # "An alpha-3 (bibliographic) code, an alpha-3 (terminologic) code (when given),
 # an alpha-2 code (when given), an English name, and a French name of a language
 # are all separated by pipe (|) characters."
-_iso639_contents = fileutils.load_file_in_same_dir(__file__,
-                                                   'ISO-639-2_utf-8.txt').decode('utf-8')
+_iso639_contents = load_file_in_same_dir(__file__, 'ISO-639-2_utf-8.txt')
 
 # drop the BOM from the beginning of the file
 _iso639_contents = _iso639_contents[1:]
@@ -116,7 +116,6 @@ lng_exceptions = { 'unknown': ('und', None),
                    'cn': ('chi', None),
                    'chs': ('chi', None),
                    'jp': ('jpn', None),
-                   'scc': ('srp', None),
                    'scr': ('hrv', None)
                    }
 
@@ -137,7 +136,7 @@ def lang_set(languages, strict=False):
     return set(Language(l, strict=strict) for l in languages)
 
 
-class Language(object):
+class Language(UnicodeMixin):
     """This class represents a human language.
 
     You can initialize it with pretty much anything, as it knows conversion
@@ -154,30 +153,30 @@ class Language(object):
     >>> Language('fr')
     Language(French)
 
-    >>> Language('eng').french_name
-    u'anglais'
+    >>> s(Language('eng').french_name)
+    'anglais'
 
-    >>> Language('pt(br)').country.english_name
-    u'Brazil'
+    >>> s(Language('pt(br)').country.english_name)
+    'Brazil'
 
-    >>> Language('Español (Latinoamérica)').country.english_name
-    u'Latin America'
+    >>> s(Language('Español (Latinoamérica)').country.english_name)
+    'Latin America'
 
     >>> Language('Spanish (Latin America)') == Language('Español (Latinoamérica)')
     True
 
-    >>> Language('zz', strict=False).english_name
-    u'Undetermined'
+    >>> s(Language('zz', strict=False).english_name)
+    'Undetermined'
 
-    >>> Language('pt(br)').opensubtitles
-    u'pob'
+    >>> s(Language('pt(br)').opensubtitles)
+    'pob'
     """
 
     _with_country_regexp = re.compile('(.*)\((.*)\)')
     _with_country_regexp2 = re.compile('(.*)-(.*)')
 
     def __init__(self, language, country=None, strict=False, scheme=None):
-        language = to_unicode(language.strip().lower())
+        language = u(language.strip().lower())
         with_country = (Language._with_country_regexp.match(language) or
                         Language._with_country_regexp2.match(language))
         if with_country:
@@ -249,7 +248,7 @@ class Language(object):
     def opensubtitles(self):
         if self.lang == 'por' and self.country and self.country.alpha2 == 'br':
             return 'pob'
-        elif self.lang in ['gre', 'eus', 'ice', 'srp']:
+        elif self.lang in ['gre', 'srp']:
             return self.alpha3term
         return self.alpha3
 
@@ -266,7 +265,7 @@ class Language(object):
         if isinstance(other, Language):
             return self.lang == other.lang
 
-        if isinstance(other, basestring):
+        if isinstance(other, base_text_type):
             try:
                 return self == Language(other)
             except ValueError:
@@ -286,9 +285,6 @@ class Language(object):
         else:
             return self.english_name
 
-    def __str__(self):
-        return unicode(self).encode('utf-8')
-
     def __repr__(self):
         if self.country:
             return 'Language(%s, country=%s)' % (self.english_name, self.country)
@@ -300,7 +296,7 @@ UNDETERMINED = Language('und')
 ALL_LANGUAGES = frozenset(Language(lng) for lng in lng_all_names) - frozenset([UNDETERMINED])
 ALL_LANGUAGES_NAMES = lng_all_names
 
-def search_language(string, lang_filter=None):
+def search_language(string, lang_filter=None, skip=None):
     """Looks for language patterns, and if found return the language object,
     its group span and an associated confidence.
 
@@ -322,7 +318,7 @@ def search_language(string, lang_filter=None):
         'is', 'it', 'am', 'mad', 'men', 'man', 'run', 'sin', 'st', 'to',
         'no', 'non', 'war', 'min', 'new', 'car', 'day', 'bad', 'bat', 'fan',
         'fry', 'cop', 'zen', 'gay', 'fat', 'cherokee', 'got', 'an', 'as',
-        'cat', 'her', 'be', 'hat', 'sun', 'may', 'my', 'mr',
+        'cat', 'her', 'be', 'hat', 'sun', 'may', 'my', 'mr', 'rum', 'pi',
         # french words
         'bas', 'de', 'le', 'son', 'vo', 'vf', 'ne', 'ca', 'ce', 'et', 'que',
         'mal', 'est', 'vol', 'or', 'mon', 'se',
@@ -330,7 +326,7 @@ def search_language(string, lang_filter=None):
         'la', 'el', 'del', 'por', 'mar',
         # other
         'ind', 'arw', 'ts', 'ii', 'bin', 'chan', 'ss', 'san', 'oss', 'iii',
-        'vi'
+        'vi', 'ben', 'da', 'lt'
         ])
     sep = r'[](){} \._-+'
 
@@ -339,7 +335,8 @@ def search_language(string, lang_filter=None):
 
     slow = ' %s ' % string.lower()
     confidence = 1.0 # for all of them
-    for lang in lng_all_names:
+
+    for lang in set(find_words(slow)) & lng_all_names:
 
         if lang in lng_common_words:
             continue
@@ -348,6 +345,16 @@ def search_language(string, lang_filter=None):
 
         if pos != -1:
             end = pos + len(lang)
+            
+            # skip if span in in skip list
+            while skip and (pos - 1, end - 1) in skip:
+                pos = slow.find(lang, end)
+                if pos == -1:
+                    continue
+                end = pos + len(lang)                
+            if pos == -1:
+                continue
+                            
             # make sure our word is always surrounded by separators
             if slow[pos - 1] not in sep or slow[end] not in sep:
                 continue
@@ -356,7 +363,7 @@ def search_language(string, lang_filter=None):
             if lang_filter and language not in lang_filter:
                 continue
 
-            # only allow those languages that have a 2-letter code, those who
+            # only allow those languages that have a 2-letter code, those that
             # don't are too esoteric and probably false matches
             if language.lang not in lng3_to_lng2:
                 continue
@@ -369,9 +376,25 @@ def search_language(string, lang_filter=None):
             else:
                 # Note: we could either be really confident that we found a
                 #       language or assume that full language names are too
-                # common words
+                #       common words and lower their confidence accordingly
                 confidence = 0.3 # going with the low-confidence route here
 
             return language, (pos - 1, end - 1), confidence
 
     return None, None, None
+
+
+def guess_language(text):
+    """Guess the language in which a body of text is written.
+
+    This uses the external guess-language python module, and will fail and return
+    Language(Undetermined) if it is not installed.
+    """
+    try:
+        from guess_language import guessLanguage
+        return Language(guessLanguage(text))
+
+    except ImportError:
+        log.error('Cannot detect the language of the given text body, missing dependency: guess-language')
+        log.error('Please install it from PyPI, by doing eg: pip install guess-language')
+        return UNDETERMINED

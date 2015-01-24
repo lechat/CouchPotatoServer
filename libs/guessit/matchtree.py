@@ -18,15 +18,19 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from guessit import Guess
-from guessit.textutils import clean_string, str_fill, to_utf8
+from __future__ import unicode_literals
+from guessit import UnicodeMixin, base_text_type, Guess
+from guessit.textutils import clean_string, str_fill
 from guessit.patterns import group_delimiters
+from guessit.guess import (merge_similar_guesses, merge_all,
+                           choose_int, choose_string)
+import copy
 import logging
 
 log = logging.getLogger(__name__)
 
 
-class BaseMatchTree(object):
+class BaseMatchTree(UnicodeMixin):
     """A MatchTree represents the hierarchical split of a string into its
     constituent semantic groups."""
 
@@ -154,6 +158,7 @@ class BaseMatchTree(object):
                      'extension': 'e',
                      'format': 'f',
                      'language': 'l',
+                     'country': 'C',
                      'videoCodec': 'v',
                      'audioCodec': 'a',
                      'website': 'w',
@@ -198,9 +203,6 @@ class BaseMatchTree(object):
     def __unicode__(self):
         return self.to_string()
 
-    def __str__(self):
-        return to_utf8(unicode(self))
-
 
 class MatchTree(BaseMatchTree):
     """The MatchTree contains a few "utility" methods which are not necessary
@@ -218,7 +220,7 @@ class MatchTree(BaseMatchTree):
         return list(self._unidentified_leaves(valid))
 
     def _leaves_containing(self, property_name):
-        if isinstance(property_name, basestring):
+        if isinstance(property_name, base_text_type):
             property_name = [ property_name ]
 
         for leaf in self._leaves():
@@ -258,3 +260,28 @@ class MatchTree(BaseMatchTree):
         """Return whether the group was explicitly enclosed by
         parentheses/square brackets/etc."""
         return (self.value[0] + self.value[-1]) in group_delimiters
+
+    def matched(self):
+        # we need to make a copy here, as the merge functions work in place and
+        # calling them on the match tree would modify it
+        parts = [node.guess for node in self.nodes() if node.guess]
+        parts = copy.deepcopy(parts)
+
+        # 1- try to merge similar information together and give it a higher
+        #    confidence
+        for int_part in ('year', 'season', 'episodeNumber'):
+            merge_similar_guesses(parts, int_part, choose_int)
+
+        for string_part in ('title', 'series', 'container', 'format',
+                            'releaseGroup', 'website', 'audioCodec',
+                            'videoCodec', 'screenSize', 'episodeFormat',
+                            'audioChannels', 'idNumber'):
+            merge_similar_guesses(parts, string_part, choose_string)
+
+        # 2- merge the rest, potentially discarding information not properly
+        #    merged before
+        result = merge_all(parts,
+                           append=['language', 'subtitleLanguage', 'other'])
+
+        log.debug('Final result: ' + result.nice_string())
+        return result

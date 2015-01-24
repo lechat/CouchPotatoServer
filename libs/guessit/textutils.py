@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # Smewt - A smart collection manager
-# Copyright (c) 2008 Nicolas Wack <wackou@gmail.com>
+# Copyright (c) 2008-2012 Nicolas Wack <wackou@gmail.com>
 #
 # Smewt is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,11 +18,17 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import unicode_literals
+from guessit import s
 from guessit.patterns import sep
+import functools
 import unicodedata
-import copy
+import re
 
 # string-related functions
+
+def normalize_unicode(s):
+    return unicodedata.normalize('NFC', s)
 
 
 def strip_brackets(s):
@@ -37,10 +43,13 @@ def strip_brackets(s):
     return s
 
 
-def clean_string(s):
-    for c in sep[:-2]: # do not remove dashes ('-')
-        s = s.replace(c, ' ')
-    parts = s.split()
+def clean_string(st):
+    for c in sep:
+        # do not remove certain chars
+        if c in ['-', ',']:
+            continue
+        st = st.replace(c, ' ')
+    parts = st.split()
     result = ' '.join(p for p in parts if p != '')
 
     # now also remove dashes on the outer part of the string
@@ -52,6 +61,21 @@ def clean_string(s):
     return result
 
 
+_words_rexp = re.compile('\w+', re.UNICODE)
+
+def find_words(s):
+    return _words_rexp.findall(s.replace('_', ' '))
+
+
+def reorder_title(title):
+    ltitle = title.lower()
+    if ltitle[-4:] == ',the':
+        return title[-3:] + ' ' + title[:-4]
+    if ltitle[-5:] == ', the':
+        return title[-3:] + ' ' + title[:-5]
+    return title
+
+
 def str_replace(string, pos, c):
     return string[:pos] + c + string[pos+1:]
 
@@ -60,45 +84,6 @@ def str_fill(string, region, c):
     start, end = region
     return string[:start] + c * (end - start) + string[end:]
 
-
-def to_utf8(o):
-    """Convert all unicode strings found in the given object to utf-8
-    strings."""
-
-    if isinstance(o, unicode):
-        return o.encode('utf-8')
-    elif isinstance(o, list):
-        return [ to_utf8(i) for i in o ]
-    elif isinstance(o, dict):
-        # need to do it like that to handle Guess instances correctly
-        # FIXME: why is that necessary?
-        result = copy.deepcopy(o)
-        for key, value in o.items():
-            result[to_utf8(key)] = to_utf8(value)
-        return result
-
-    else:
-        return o
-
-def to_unicode(o):
-    """Convert all strings found in the given object to normalized
-    unicode strings, using the UTF-8 codec if needed."""
-
-    if isinstance(o, unicode):
-        return unicodedata.normalize('NFC', o)
-    if isinstance(o, str):
-        return unicodedata.normalize('NFC', o.decode('utf-8'))
-    elif isinstance(o, list):
-        return [ to_unicode(i) for i in o ]
-    elif isinstance(o, dict):
-        # need to do it like that to handle Guess instances correctly
-        #result = copy.deepcopy(o)
-        for key, value in o.items():
-            result[to_unicode(key)] = to_unicode(value)
-        return result
-
-    else:
-        return o
 
 
 def levenshtein(a, b):
@@ -176,21 +161,20 @@ def find_first_level_groups_span(string, enclosing):
 
 def split_on_groups(string, groups):
     """Split the given string using the different known groups for boundaries.
-
-    >>> split_on_groups('0123456789', [ (2, 4) ])
+    >>> s(split_on_groups('0123456789', [ (2, 4) ]))
     ['01', '23', '456789']
 
-    >>> split_on_groups('0123456789', [ (2, 4), (4, 6) ])
+    >>> s(split_on_groups('0123456789', [ (2, 4), (4, 6) ]))
     ['01', '23', '45', '6789']
 
-    >>> split_on_groups('0123456789', [ (5, 7), (2, 4) ])
+    >>> s(split_on_groups('0123456789', [ (5, 7), (2, 4) ]))
     ['01', '23', '4', '56', '789']
 
     """
     if not groups:
         return [ string ]
 
-    boundaries = sorted(set(reduce(lambda l, x: l + list(x), groups, [])))
+    boundaries = sorted(set(functools.reduce(lambda l, x: l + list(x), groups, [])))
     if boundaries[0] != 0:
         boundaries.insert(0, 0)
     if boundaries[-1] != len(string):
@@ -212,22 +196,22 @@ def find_first_level_groups(string, enclosing, blank_sep=None):
     This does not return nested groups, ie: '(ab(c)(d))' will return a single group
     containing the whole string.
 
-    >>> find_first_level_groups('', '()')
+    >>> s(find_first_level_groups('', '()'))
     ['']
 
-    >>> find_first_level_groups('abcd', '()')
+    >>> s(find_first_level_groups('abcd', '()'))
     ['abcd']
 
-    >>> find_first_level_groups('abc(de)fgh', '()')
+    >>> s(find_first_level_groups('abc(de)fgh', '()'))
     ['abc', '(de)', 'fgh']
 
-    >>> find_first_level_groups('(ab(c)(d))', '()', blank_sep = '_')
+    >>> s(find_first_level_groups('(ab(c)(d))', '()', blank_sep = '_'))
     ['_ab(c)(d)_']
 
-    >>> find_first_level_groups('ab[c]de[f]gh(i)', '[]')
+    >>> s(find_first_level_groups('ab[c]de[f]gh(i)', '[]'))
     ['ab', '[c]', 'de', '[f]', 'gh(i)']
 
-    >>> find_first_level_groups('()[]()', '()', blank_sep = '-')
+    >>> s(find_first_level_groups('()[]()', '()', blank_sep = '-'))
     ['--', '[]', '--']
 
     """

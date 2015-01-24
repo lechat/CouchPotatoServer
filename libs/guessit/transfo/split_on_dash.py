@@ -18,6 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import unicode_literals
 from guessit.patterns import sep
 import re
 import logging
@@ -36,16 +37,6 @@ def process(mtree):
             span = match.span()
             indices.extend([ span[0], span[1] ])
             match = pattern.search(node.value, span[1])
-
-        didx = node.value.find('-')
-        while didx > 0:
-            if (didx > 10 and
-                (didx - 1 not in indices and
-                 didx + 2 not in indices)):
-
-                indices.extend([ didx, didx + 1 ])
-
-            didx = node.value.find('-', didx + 1)
 
         if indices:
             node.partition(indices)

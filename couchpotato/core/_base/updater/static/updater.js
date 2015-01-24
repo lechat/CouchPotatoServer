@@ -5,7 +5,7 @@ var UpdaterBase = new Class({
 	initialize: function(){
 		var self = this;
 
-		App.addEvent('load', self.info.bind(self, 1000))
+		App.addEvent('load', self.info.bind(self, 2000));
 		App.addEvent('unload', function(){
 			if(self.timer)
 				clearTimeout(self.timer);
@@ -24,7 +24,7 @@ var UpdaterBase = new Class({
 					self.doUpdate();
 				else {
 					App.unBlockPage();
-					App.fireEvent('message', 'No updates available');
+					App.trigger('message', ['No updates available']);
 				}
 			}
 		})
@@ -66,7 +66,7 @@ var UpdaterBase = new Class({
 
 		var changelog = 'https://github.com/'+data.repo_name+'/compare/'+data.version.hash+'...'+data.branch;
 		if(data.update_version.changelog)
-			changelog = data.update_version.changelog + '#' + data.version.hash+'...'+data.update_version.hash
+			changelog = data.update_version.changelog + '#' + data.version.hash+'...'+data.update_version.hash;
 
 		self.message = new Element('div.message.update').adopt(
 			new Element('span', {
@@ -84,23 +84,24 @@ var UpdaterBase = new Class({
 					'click': self.doUpdate.bind(self)
 				}
 			})
-		).inject($(document.body).getElement('.header'))
+		).inject(document.body)
 	},
 
 	doUpdate: function(){
 		var self = this;
 
+		App.blockPage('Please wait while CouchPotato is being updated with more awesome stuff.', 'Updating');
 		Api.request('updater.update', {
 			'onComplete': function(json){
-				if(json.success){
+				if(json.success)
 					self.updating();
-				}
+				else
+					App.unBlockPage()
 			}
 		});
 	},
 
 	updating: function(){
-		App.blockPage('Please wait while CouchPotato is being updated with more awesome stuff.', 'Updating');
 		App.checkAvailable.delay(500, App, [1000, function(){
 			window.location.reload();
 		}]);

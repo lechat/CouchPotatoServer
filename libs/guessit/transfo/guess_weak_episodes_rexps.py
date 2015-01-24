@@ -18,6 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import unicode_literals
 from guessit import Guess
 from guessit.transfo import SingleNodeGuesser
 from guessit.patterns import weak_episode_rexps
@@ -40,11 +41,16 @@ def guess_weak_episodes_rexps(string, node):
 
             epnum = int(metadata['episodeNumber'])
             if epnum > 100:
-                return Guess({ 'season': epnum // 100,
-                               'episodeNumber': epnum % 100 },
-                             confidence=0.6), span
+                season, epnum = epnum // 100, epnum % 100
+                # episodes which have a season > 25 are most likely errors
+                # (Simpsons is at 23!)
+                if season > 25:
+                    continue
+                return Guess({ 'season': season,
+                               'episodeNumber': epnum },
+                             confidence=0.6, raw=string[span[0]:span[1]]), span
             else:
-                return Guess(metadata, confidence=0.3), span
+                return Guess(metadata, confidence=0.3, raw=string[span[0]:span[1]]), span
 
     return None, None
 
